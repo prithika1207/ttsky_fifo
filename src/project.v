@@ -1,27 +1,50 @@
-/*
- * Copyright (c) 2024 Your Name
- * SPDX-License-Identifier: Apache-2.0
- */
+module fifo #(
+    parameter WIDTH = 8,
+    parameter DEPTH = 4,
+    parameter ADDR_WIDTH = 2   // log2(DEPTH)
+)(
+    input wire clk,
+    input wire rst,
 
-`default_nettype none
+    input wire wr_en,
+    input wire [WIDTH-1:0] din,
 
-module tt_um_example (
-    input  wire [7:0] ui_in,    // Dedicated inputs
-    output wire [7:0] uo_out,   // Dedicated outputs
-    input  wire [7:0] uio_in,   // IOs: Input path
-    output wire [7:0] uio_out,  // IOs: Output path
-    output wire [7:0] uio_oe,   // IOs: Enable path (active high: 0=input, 1=output)
-    input  wire       ena,      // always 1 when the design is powered, so you can ignore it
-    input  wire       clk,      // clock
-    input  wire       rst_n     // reset_n - low to reset
+    input wire rd_en,
+    output reg [WIDTH-1:0] dout,
+
+    output wire full,
+    output wire empty
 );
 
-  // All output pins must be assigned. If not used, assign to 0.
-  assign uo_out  = ui_in + uio_in;  // Example: ou_out is the sum of ui_in and uio_in
-  assign uio_out = 0;
-  assign uio_oe  = 0;
+    reg [WIDTH-1:0] mem [0:DEPTH-1];
 
-  // List all unused inputs to prevent warnings
-  wire _unused = &{ena, clk, rst_n, 1'b0};
+    reg [ADDR_WIDTH:0] wr_ptr = 0;
+    reg [ADDR_WIDTH:0] rd_ptr = 0;
+
+    // Write logic
+    always @(posedge clk) begin
+        if (rst) begin
+            wr_ptr <= 0;
+        end else if (wr_en && !full) begin
+            mem[wr_ptr[ADDR_WIDTH-1:0]] <= din;
+            wr_ptr <= wr_ptr + 1;
+        end
+    end
+
+    // Read logic
+    always @(posedge clk) begin
+        if (rst) begin
+            rd_ptr <= 0;
+            dout <= 0;
+        end else if (rd_en && !empty) begin
+            dout <= mem[rd_ptr[ADDR_WIDTH-1:0]];
+            rd_ptr <= rd_ptr + 1;
+        end
+    end
+
+    // Status flags
+    assign empty = (wr_ptr == rd_ptr);
+    assign full  = (wr_ptr[ADDR_WIDTH] != rd_ptr[ADDR_WIDTH]) &&
+                   (wr_ptr[ADDR_WIDTH-1:0] == rd_ptr[ADDR_WIDTH-1:0]);
 
 endmodule
